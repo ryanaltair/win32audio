@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:win32audio/win32audio.dart';
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Audio.setupChangeListener();
