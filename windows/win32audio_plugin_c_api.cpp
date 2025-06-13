@@ -136,99 +136,7 @@ static HRESULT getDeviceProperty(IMMDevice *pDevice, DeviceProps *pOutput)
 
     return hr;
 }
-
-std::vector<DeviceProps> EnumAudioDevices(EDataFlow deviceType, ERole eRole)
-{
-    std::vector<DeviceProps> output;
-
-    HRESULT hr = CoInitializeEx(0, COINIT_APARTMENTTHREADED);
-    if (FAILED(hr))
-    {
-        OutputDebugString(L"Failed to initialize COM\n");
-        return output;
-    }
-
-    IMMDeviceEnumerator *pEnumerator = nullptr;
-    hr = CoCreateInstance(CLSID_MMDeviceEnumerator, nullptr, CLSCTX_ALL, IID_IMMDeviceEnumerator, reinterpret_cast<void **>(&pEnumerator));
-    if (FAILED(hr) || !pEnumerator)
-    {
-        OutputDebugString(L"Failed to create device enumerator\n");
-        CoUninitialize();
-        return output;
-    }
-
-    IMMDevice *pActive = nullptr;
-    wstring activeDevID;
-
-    hr = pEnumerator->GetDefaultAudioEndpoint(deviceType, eRole, &pActive);
-    if (SUCCEEDED(hr) && pActive)
-    {
-        LPWSTR activeID = nullptr;
-        hr = pActive->GetId(&activeID);
-        if (SUCCEEDED(hr) && activeID)
-        {
-            activeDevID = activeID;
-            CoTaskMemFree(activeID);
-        }
-        pActive->Release();
-    }
-
-    IMMDeviceCollection *pCollection = nullptr;
-    hr = pEnumerator->EnumAudioEndpoints(deviceType, DEVICE_STATE_ACTIVE, &pCollection);
-    if (FAILED(hr) || !pCollection)
-    {
-        OutputDebugString(L"Failed to enumerate audio endpoints\n");
-        if (pEnumerator)
-            pEnumerator->Release();
-        CoUninitialize();
-        return output;
-    }
-
-    UINT cEndpoints = 0;
-    hr = pCollection->GetCount(&cEndpoints);
-    if (FAILED(hr))
-    {
-        OutputDebugString(L"Failed to get count of audio endpoints\n");
-        pCollection->Release();
-        pEnumerator->Release();
-        CoUninitialize();
-        return output;
-    }
-
-    for (UINT n = 0; n < cEndpoints; ++n)
-    {
-        IMMDevice *pDevice = nullptr;
-        hr = pCollection->Item(n, &pDevice);
-        if (FAILED(hr) || !pDevice)
-        {
-            OutputDebugString(L"Failed to get audio endpoint\n");
-            continue;
-        }
-
-        DeviceProps device;
-        if (SUCCEEDED(getDeviceProperty(pDevice, &device)))
-        {
-            LPWSTR id = nullptr;
-            hr = pDevice->GetId(&id);
-            if (SUCCEEDED(hr) && id)
-            {
-                wstring currentID(id);
-                device.id = currentID;
-                device.isActive = (currentID == activeDevID);
-                CoTaskMemFree(id);
-            }
-            output.push_back(device);
-        }
-
-        pDevice->Release();
-    }
-
-    pCollection->Release();
-    pEnumerator->Release();
-    CoUninitialize();
-
-    return output;
-}
+ 
  
  
  
@@ -299,27 +207,6 @@ private:
             Initialize();
             result->Success(flutter::EncodableValue(true));
         }
-        else if (method_call.method_name().compare("enumAudioDevices") == 0)
-        {
-            const flutter::EncodableMap &args = std::get<flutter::EncodableMap>(*method_call.arguments());
-            int deviceType = std::get<int>(args.at(flutter::EncodableValue("deviceType")));
-            int role = std::get<int>(args.at(flutter::EncodableValue("role")));
-            std::vector<DeviceProps> devices = EnumAudioDevices((EDataFlow)deviceType, (ERole)role);
-            // loop through devices and add them to a map
-            flutter::EncodableMap map;
-            int i = 0;
-            for (const auto &device : devices)
-            {
-                flutter::EncodableMap deviceMap;
-                deviceMap[flutter::EncodableValue("id")] = flutter::EncodableValue(Encoding::WideToUtf8(device.id));
-                deviceMap[flutter::EncodableValue("name")] = flutter::EncodableValue(Encoding::WideToUtf8(device.name));
-                deviceMap[flutter::EncodableValue("iconInfo")] = flutter::EncodableValue(Encoding::WideToUtf8(device.iconInfo));
-                deviceMap[flutter::EncodableValue("isActive")] = flutter::EncodableValue(device.isActive);
-                map[i] = flutter::EncodableValue(deviceMap);
-                i++;
-            }
-            result->Success(flutter::EncodableValue(map));
-        }  
         else
         {
             // MessageBoxA(NULL, "Method not implemented", "Win32AudioPlugin", MB_ICONWARNING | MB_OK);
